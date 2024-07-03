@@ -202,6 +202,16 @@ class ReLUSquaredActivation(nn.Module):
         return squared
 
 
+class CReLU(nn.Module):
+
+    def __init__(self):
+        super(CReLU, self).__init__()
+
+    def forward(self, x):
+        x = torch.cat((x,-x),-1)
+        return nn.functional.relu(x)
+
+
 class ClassInstantier(OrderedDict):
     def __getitem__(self, key):
         content = super().__getitem__(key)
@@ -228,6 +238,7 @@ ACT2CLS = {
     "silu": SiLUActivation,
     "swish": SiLUActivation,
     "tanh": nn.Tanh,
+    "crelu": CReLU,
 }
 ACT2FN = ClassInstantier(ACT2CLS)
 

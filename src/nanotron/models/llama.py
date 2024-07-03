@@ -120,11 +120,15 @@ class RotaryEmbedding(nn.Module):
 class GLUActivation(nn.Module):
     def __init__(self, act_fn_name: str):
         super().__init__()
+        self.act_fn_name = act_fn_name
         self.act = ACT2FN[act_fn_name]
 
     def forward(self, merged_states: torch.Tensor):
         gate_states, up_states = torch.split(merged_states, merged_states.shape[-1] // 2, dim=-1)
-        return self.act(gate_states) * up_states
+        if self.act_fn_name == "crelu":
+            return self.act(gate_states) * torch.cat((up_states,up_states),-1)
+        else:
+            return self.act(gate_states) * up_states
 
 
 class MLP(nn.Module):
@@ -156,7 +160,7 @@ class MLP(nn.Module):
             contiguous_chunks=gate_up_contiguous_chunks,
         )
         self.down_proj = TensorParallelRowLinear(
-            config.intermediate_size,
+            2 * config.intermediate_size if config.hidden_act == "crelu" else config.intermediate_size,
             config.hidden_size,
             pg=tp_pg,
             mode=tp_mode,
