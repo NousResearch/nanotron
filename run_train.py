@@ -182,6 +182,7 @@ def get_dataloader_from_data_stage(
                 sequence_length=trainer.sequence_length,
                 train_on_completions_only=data.dataset.train_on_completions_only,
                 remove_cross_attention=data.dataset.remove_cross_attention,
+                chat_format=data.dataset.chat_format,
                 split=data.dataset.hf_dataset_split,
                 conversation_column_name=data.dataset.conversation_column_name,
                 dp_rank=trainer.parallel_context.dp_pg.rank(),

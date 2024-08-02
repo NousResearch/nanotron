@@ -1,6 +1,12 @@
 from typing import List, Tuple
+from enum import Enum, auto
 
 from transformers import AutoTokenizer
+
+
+class ChatFormat(Enum):
+    LLAMA3 = auto()
+    CHATML = auto()
 
 
 class ChatTokenizer:
@@ -11,12 +17,22 @@ class ChatTokenizer:
         tokenizer_name_or_path (str): A path to a directory containing vocabulary files required by the tokenizer or the model id of a predefined tokenizer hosted inside a model repo on the Hugging Face Hub.
     """
 
-    def __init__(self, tokenizer_name_or_path: str):
+    def __init__(self, tokenizer_name_or_path: str, chat_format: ChatFormat = ChatFormat.LLAMA3):
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
+
+        self._chat_format = chat_format
+        if chat_format == ChatFormat.LLAMA3:
+            self._header_start = "<|start_header_id|>"
+            self._header_end = "<|end_header_id|>\n\n"
+            self._turn_end = "<|eot_id|>"
+        elif chat_format == ChatFormat.CHATML:
+            self._header_start = "<|im_start|>"
+            self._header_end = "\n"
+            self._turn_end = "<|im_end|>\n"
 
         # Add pad token if necessary
         if self.tokenizer.pad_token is None:
-            self.tokenizer.add_special_tokens({"pad_token": "<|eot_id|>"})
+            self.tokenizer.add_special_tokens({"pad_token": self._turn_end})
 
     def __call__(self, conversation: List[dict]) -> Tuple[List[int], List[bool]]:
         """
@@ -65,9 +81,11 @@ class ChatTokenizer:
         # single format and document it properly rather than supporting multiple formats, as each DATASET will need a different
         # ChatTokenizer and the idea is that all Datasets share the same ChatTokenizer
 
+        role, is_input = self._get_role(message)
+
         # Encode header
         tokens = self.tokenizer.encode(
-            f"<|start_header_id|>{message['from']}<|end_header_id|>\n\n", add_special_tokens=False
+            f"{self._header_start}{role}{self._header_end}", add_special_tokens=False
         )
         is_completitions = [False] * len(tokens)
 
@@ -75,9 +93,22 @@ class ChatTokenizer:
         tokens.extend(self.tokenizer.encode(message["value"].strip(), add_special_tokens=False))
 
         # Append <|eot_id|> token
-        tokens.extend(self.tokenizer.encode("<|eot_id|>", add_special_tokens=False))
+        tokens.extend(self.tokenizer.encode(self._turn_end, add_special_tokens=False))
 
         # True if token belongs to assistant answer, False otherwise
-        is_completitions.extend([True if message["from"] == "gpt" else False] * (len(tokens) - len(is_completitions)))
+        is_completitions.extend([not is_input] * (len(tokens) - len(is_completitions)))
 
         return tokens, is_completitions
+
+    def _get_role(self, message: dict) -> Tuple[str, bool]:
+        """
+            Return the canonical role for a given message, as well as if its value
+            should be considered input (and therefore not trained on)
+        """
+        role = message["from"]
+        if role == "gpt" or role == "assistant":
+            return "assistant", False
+        elif role == "human":
+            return "user", True
+        else:
+            return role, True

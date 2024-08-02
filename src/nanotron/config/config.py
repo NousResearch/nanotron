@@ -23,6 +23,7 @@ from nanotron.generation.sampler import SamplerType
 from nanotron.logging import get_logger
 from nanotron.parallel.pipeline_parallel.engine import PipelineEngine
 from nanotron.parallel.tensor_parallel.nn import TensorParallelLinearMode
+from nanotron.data.chat_tokenizer import ChatFormat
 
 logger = get_logger(__name__)
 
@@ -112,6 +113,7 @@ class ChatDatasetsArgs:
     hf_dataset: str
     hf_dataset_split: str
     conversation_column_name: str
+    chat_format: Union[str, ChatFormat] = ChatFormat.LLAMA3
     # Debug
     train_on_completions_only: bool = True
     remove_cross_attention: bool = True
@@ -121,6 +123,8 @@ class ChatDatasetsArgs:
             self.hf_dataset_split = "train"
         if self.conversation_column_name is None:
             self.conversation_column_name = "conversations"
+        if isinstance(self.chat_format, str):
+            self.chat_format = ChatFormat[self.chat_format.upper()]
 
 
 @dataclass
@@ -449,6 +453,7 @@ def get_config_from_dict(
                 TensorParallelLinearMode: lambda x: TensorParallelLinearMode[x.upper()],
                 RecomputeGranularity: lambda x: RecomputeGranularity[x.upper()],
                 SamplerType: lambda x: SamplerType[x.upper()],
+                ChatFormat: lambda x: ChatFormat[x.upper()],
             },
             # strict_unions_match=True,
             strict=True,

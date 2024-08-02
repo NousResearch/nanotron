@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 from datasets import load_dataset
 from datasets.distributed import split_dataset_by_node
-from nanotron.data.chat_tokenizer import ChatTokenizer
+from nanotron.data.chat_tokenizer import ChatTokenizer, ChatFormat
 from nanotron.data.collator import (
     build_labels,
     build_labels_completions_only,
@@ -41,6 +41,7 @@ class ChatDataset(IterableDataset):
         conversation_column_name: str,
         train_on_completions_only: bool = True,
         remove_cross_attention: bool = True,
+        chat_format: ChatFormat = ChatFormat.CHATML,
         split: str = "train",
         dp_rank: int = 0,
         dp_ranks_size: int = 1,
@@ -54,7 +55,7 @@ class ChatDataset(IterableDataset):
         # TODO(tj.solergibert) Support interleaving datasets
 
         self.dataset_path = dataset_path
-        self.chat_tokenizer = ChatTokenizer(tokenizer_name_or_path)
+        self.chat_tokenizer = ChatTokenizer(tokenizer_name_or_path, chat_format)
         self.sequence_length = sequence_length
         self.conversation_column_name = conversation_column_name
         self.skip_num_samples = skip_num_samples
@@ -79,7 +80,10 @@ class ChatDataset(IterableDataset):
 
         # TODO(tj.solergibert) Delete (debug)
         self.debug_tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)  # TODO delete debug
-        self.debug_tokenizer.chat_template = "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['from'] + '<|end_header_id|>\n\n'+ message['value'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>' }}{% endif %}"
+        if chat_format == ChatFormat.LLAMA3:
+            self.debug_tokenizer.chat_template = "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['from'] + '<|end_header_id|>\n\n'+ message['value'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{% if add_generation_prompt %}{{ '<|start_header_id|>assistant<|end_header_id|>' }}{% endif %}"
+        elif chat_format == ChatFormat.CHATML:
+            self.debug_tokenizer.chat_template = "{{- bos_token }}{% if not add_generation_prompt is defined %}{% set add_generation_prompt = false %}{% endif %}{% for message in messages %}{{'<|im_start|>' + message['from'] + '\n' + message['value'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}"
 
     def __iter__(self):
         max_buffer_token_len = 1 + self.sequence_length
@@ -93,6 +97,11 @@ class ChatDataset(IterableDataset):
 
                 # TODO(tj.solergibert) Delete (debug). Check if HF apply_chat_template produces the same result as ChatTokenizer
                 # The [:-1] of tokens is because apply chat template doesn't adds eos (NOT eot) token
+                for message in sample["conversations"]:
+                    if message["from"] == "gpt":
+                        message["from"] = "assistant"
+                    if message["from"] == "human":
+                        message["from"] = "user"
                 assert (
                     self.debug_tokenizer.apply_chat_template(sample["conversations"]) == tokens[:-1]
                 ), f'{self.debug_tokenizer.apply_chat_template(sample["conversations"])}\n\n{tokens[:-1]}'
