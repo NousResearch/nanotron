@@ -40,6 +40,7 @@ class ChatDataset(IterableDataset):
         conversation_column_name: str,
         train_on_completions_only: bool = True,
         remove_cross_attention: bool = True,
+        pack_samples: bool = True,
         split: str = "train",
         dp_rank: int = 0,
         dp_ranks_size: int = 1,
@@ -58,6 +59,7 @@ class ChatDataset(IterableDataset):
         self.conversation_column_name = conversation_column_name
         self.skip_num_samples = skip_num_samples
         self.seed = seed
+        self.pack_samples = pack_samples
 
         # Load, split and shuffle dataset
         self.dataset = load_dataset(dataset_path, split=split, streaming=True)
@@ -100,11 +102,12 @@ class ChatDataset(IterableDataset):
                 buffer_is_completition.extend(is_completition)
                 buffer_lengths.append(len(tokens))
 
-                if len(buffer_tokens) > max_buffer_token_len:  # Can't pack more samples, yield
-                    # Pop last sample from buffers
-                    sample_tokens = buffer_tokens[: -len(tokens)]
-                    sample_completitions = buffer_is_completition[: -len(tokens)]
-                    sample_lengths = buffer_lengths[:-1]
+                if len(buffer_tokens) > max_buffer_token_len or not self.pack_samples:  # Can't pack more samples, yield
+                    if self.pack_samples:
+                        # Pop last sample from buffers
+                        sample_tokens = buffer_tokens[: -len(tokens)]
+                        sample_completitions = buffer_is_completition[: -len(tokens)]
+                        sample_lengths = buffer_lengths[:-1]
 
                     # TODO(tj.solergibert) Delete (debug)
                     assert len(sample_tokens) == len(sample_completitions) == sum(sample_lengths)
