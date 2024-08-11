@@ -1,6 +1,6 @@
 import nanotron.distributed as dist
 from nanotron import logging
-from nanotron.data.collator import DataCollatorForSFT, NanosetDataCollatorForCLM
+from nanotron.data.collator import DataCollatorForSFT, DataCollatorForUnpackedSFT, NanosetDataCollatorForCLM
 from nanotron.dataloader import (
     EmptyInfiniteDataset,
     get_dataloader_worker_init,
@@ -77,6 +77,10 @@ def build_chat_dataloader(
         dataset = EmptyInfiniteDataset(length=dataset_length)
 
     data_collator = DataCollatorForSFT(
+        input_pp_rank=input_pp_rank,
+        output_pp_rank=output_pp_rank,
+        parallel_context=parallel_context,
+    ) if dataset.pack_samples else DataCollatorForUnpackedSFT(
         input_pp_rank=input_pp_rank,
         output_pp_rank=output_pp_rank,
         parallel_context=parallel_context,

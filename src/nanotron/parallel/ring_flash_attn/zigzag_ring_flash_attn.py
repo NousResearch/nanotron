@@ -14,6 +14,7 @@ def zigzag_ring_flash_attn_forward(
     dropout_p=0,
     causal=True,
     window_size=(-1, -1),
+    softcap=0.0,
     alibi_slopes=None,
     deterministic=False,
 ):
@@ -36,6 +37,7 @@ def zigzag_ring_flash_attn_forward(
             softmax_scale,
             causal=causal,
             window_size=window_size,
+            softcap=softcap,
             alibi_slopes=alibi_slopes,
             return_softmax=True and dropout_p > 0,
         )
@@ -87,6 +89,7 @@ def zigzag_ring_flash_attn_backward(
     dropout_p=0,
     causal=True,
     window_size=(-1, -1),
+    softcap=0.0,
     alibi_slopes=None,
     deterministic=False,
 ):
@@ -126,6 +129,7 @@ def zigzag_ring_flash_attn_backward(
             softmax_scale,
             causal,
             window_size,
+            softcap,
             alibi_slopes,
             deterministic,
             rng_state=None,

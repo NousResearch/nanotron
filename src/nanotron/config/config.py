@@ -127,7 +127,7 @@ class ChatDatasetsArgs:
 class DataArgs:
     """Arguments related to the data and data files processing"""
 
-    dataset: Optional[Union[PretrainDatasetsArgs, NanosetDatasetsArgs]]
+    dataset: Optional[Union[PretrainDatasetsArgs, NanosetDatasetsArgs, ChatDatasetsArgs]]
     seed: Optional[int]
     num_loading_workers: Optional[int] = 1
 

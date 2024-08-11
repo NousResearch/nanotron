@@ -189,6 +189,8 @@ def get_dataloader_from_data_stage(
                 conversation_column_name=data.dataset.conversation_column_name,
                 dp_rank=trainer.parallel_context.dp_pg.rank(),
                 dp_ranks_size=trainer.parallel_context.dp_pg.size(),
+                sp_ranks_size=trainer.parallel_context.sp_pg.size(),
+                seed=data.seed,
             )
 
         # Prepare dataloader
@@ -198,6 +200,8 @@ def get_dataloader_from_data_stage(
             input_pp_rank=input_pp_rank,
             output_pp_rank=output_pp_rank,
         )
+
+        return train_dataloader
     else:
         raise ValueError(f"Unhandled case of `self.config.data.dataset`. Got: {data.dataset}")
 

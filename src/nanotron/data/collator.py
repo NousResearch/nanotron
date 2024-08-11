@@ -130,7 +130,7 @@ class DataCollatorForSFT:
             }
 
         input_ids = np.vstack([examples[i]["input_ids"] for i in range(len(examples))])  # (b, s)
-        is_completitions = np.vstack([examples[i]["is_completitions"] for i in range(len(examples))])  # (b, s)
+        label_mask = np.vstack([examples[i]["label_mask"] for i in range(len(examples))])  # (b, s)
         position_ids = np.vstack([examples[i]["position_ids"] for i in range(len(examples))])  # (b, s)
 
         result: Dict[str, Union[np.ndarray, TensorPointer]] = {}
@@ -148,7 +148,63 @@ class DataCollatorForSFT:
         # Process labels: shift them to the left.
         if current_pp_rank == self.output_pp_rank:
             result["label_ids"] = input_ids[:, 1:]
-            result["label_mask"] = is_completitions[:, 1:]
+            result["label_mask"] = label_mask[:, 1:]
+
+        # Cast np.array to torch.Tensor
+        result = {k: v if isinstance(v, TensorPointer) else torch.from_numpy(v) for k, v in result.items()}
+        return result
+
+
+@dataclasses.dataclass
+class DataCollatorForUnpackedSFT:
+    """
+    Data collator used with Chat Dataset.
+    - input_pp_rank: Discards last input id token
+    - output_pp_rank: Discards first label id token
+    - other pp ranks: Don't have data. Instead, we use `TensorPointer` to point to the rank having the data.
+    """
+
+    input_pp_rank: int
+    output_pp_rank: int
+    parallel_context: ParallelContext
+
+    def __call__(self, examples: List[Dict[str, List[int]]]) -> Dict[str, Union[torch.Tensor, TensorPointer]]:
+        # Process the case when current rank doesn't require data. We return `TensorPointer` that points to ranks having the data.
+        assert len(examples) == 1
+
+        current_pp_rank = dist.get_rank(self.parallel_context.pp_pg)
+        if current_pp_rank not in [
+            self.input_pp_rank,
+            self.output_pp_rank,
+        ]:
+            assert all(len(example) == 0 for example in examples)
+            return {
+                "input_ids": TensorPointer(group_rank=self.input_pp_rank),
+                "input_mask": TensorPointer(group_rank=self.input_pp_rank),
+                "label_ids": TensorPointer(group_rank=self.output_pp_rank),
+                "label_mask": TensorPointer(group_rank=self.output_pp_rank),
+            }
+
+        input_ids = np.vstack([examples[i]["input_ids"] for i in range(len(examples))])  # (b, s)
+        input_mask = np.vstack([examples[i]["input_mask"] for i in range(len(examples))])  # (b, s)
+        label_mask = np.vstack([examples[i]["label_mask"] for i in range(len(examples))])  # (b, s)
+
+        result: Dict[str, Union[torch.LongTensor, TensorPointer]] = {}
+
+        result["input_ids"] = TensorPointer(group_rank=self.input_pp_rank)
+        result["input_mask"] = TensorPointer(group_rank=self.input_pp_rank)
+        result["label_ids"] = TensorPointer(group_rank=self.output_pp_rank)
+        result["label_mask"] = TensorPointer(group_rank=self.output_pp_rank)
+
+        # Process inputs
+        if current_pp_rank == self.input_pp_rank:
+            result["input_ids"] = input_ids[:, :-1]
+            result["input_mask"] = input_mask[:, :-1]
+
+        # Process labels: shift them to the left.
+        if current_pp_rank == self.output_pp_rank:
+            result["label_ids"] = input_ids[:, 1:]
+            result["label_mask"] = label_mask[:, 1:]
 
         # Cast np.array to torch.Tensor
         result = {k: v if isinstance(v, TensorPointer) else torch.from_numpy(v) for k, v in result.items()}

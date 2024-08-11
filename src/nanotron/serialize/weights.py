@@ -302,7 +302,7 @@ def load_weights(
                     finally:
                         assert (
                             current_checkpoint_version == checkpoint_version
-                        ), f"Checkpoint version mismatch at {shards_path[0]}."
+                        ), f"Checkpoint version mismatch at {shards_path[0]}. Got {current_checkpoint_version} but expected {checkpoint_version}"
 
                 if checkpoint_version <= CHECKPOINT_VERSION:
                     load_sharded_param_latest(

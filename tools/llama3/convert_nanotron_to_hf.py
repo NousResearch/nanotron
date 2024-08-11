@@ -51,12 +51,13 @@ def get_args():
 
 def main(args):
     # Init Nanotron Parallel Utilities
-    parallel_config = ParallelismArgs(dp=1, pp=1, tp=1)
+    parallel_config = ParallelismArgs(dp=1, pp=1, tp=1, sp=1)
 
     parallel_context = ParallelContext(
         data_parallel_size=parallel_config.dp,
         pipeline_parallel_size=parallel_config.pp,
         tensor_parallel_size=parallel_config.tp,
+        sequence_parallel_size=parallel_config.sp,
     )
 
     set_ranks_logging_level(parallel_context=parallel_context, logging_config=LoggingArgs())
