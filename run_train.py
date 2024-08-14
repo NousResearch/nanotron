@@ -189,6 +189,7 @@ def get_dataloader_from_data_stage(
                 conversation_column_name=data.dataset.conversation_column_name,
                 dp_rank=trainer.parallel_context.dp_pg.rank(),
                 dp_ranks_size=trainer.parallel_context.dp_pg.size(),
+                tp_ranks_size=trainer.parallel_context.tp_pg.size(),
                 sp_ranks_size=trainer.parallel_context.sp_pg.size(),
                 seed=data.seed,
             )

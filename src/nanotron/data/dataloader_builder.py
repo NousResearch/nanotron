@@ -70,21 +70,25 @@ def build_chat_dataloader(
     output_pp_rank: int,
     dataloader_pin_memory: bool = True,
 ) -> DataLoader:
+    pack_samples = dataset.pack_samples
 
     # Case of ranks not requiring data. We give them a dummy dataset, then the collator will do his job
     if dist.get_rank(parallel_context.pp_pg) not in [input_pp_rank, output_pp_rank]:
         dataset_length = 1_000_000  # len(dataset) TODO find a more elegant way to specify this dummy dataset
         dataset = EmptyInfiniteDataset(length=dataset_length)
 
-    data_collator = DataCollatorForSFT(
-        input_pp_rank=input_pp_rank,
-        output_pp_rank=output_pp_rank,
-        parallel_context=parallel_context,
-    ) if dataset.pack_samples else DataCollatorForUnpackedSFT(
-        input_pp_rank=input_pp_rank,
-        output_pp_rank=output_pp_rank,
-        parallel_context=parallel_context,
-    )
+    if pack_samples:
+        data_collator = DataCollatorForSFT(
+            input_pp_rank=input_pp_rank,
+            output_pp_rank=output_pp_rank,
+            parallel_context=parallel_context,
+        )
+    else:
+        data_collator = DataCollatorForUnpackedSFT(
+            input_pp_rank=input_pp_rank,
+            output_pp_rank=output_pp_rank,
+            parallel_context=parallel_context,
+        )
 
     dp_rank = parallel_context.dp_pg.rank()
 

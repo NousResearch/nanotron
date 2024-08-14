@@ -48,6 +48,7 @@ class ChatDataset(IterableDataset):
         split: str = "train",
         dp_rank: int = 0,
         dp_ranks_size: int = 1,
+        tp_ranks_size: int = 1,
         sp_ranks_size: int = 1,
         skip_num_samples: int = None,  # TODO(tj.solergibert) Delete, check later comment
         seed: int = 1234,
@@ -66,6 +67,7 @@ class ChatDataset(IterableDataset):
         self.seed = seed
         self.pack_samples = pack_samples
         self.sp_chunks = sp_ranks_size * 2 if sp_ranks_size > 1 else 1
+        self.sp_tp_product = self.sp_chunks * tp_ranks_size
 
         # Load, split and shuffle dataset
         self.dataset = load_dataset(dataset_path, split=split, streaming=True)
@@ -143,14 +145,14 @@ class ChatDataset(IterableDataset):
                     is_completition = self.create_labels(tokens, is_completition)
                     input_mask = ([1] * len(tokens))
 
-                    rem = len(tokens) % self.sp_chunks
+                    rem = len(tokens) % self.sp_tp_product
                     if rem != 0:
-                        pad_amount = self.sp_chunks - rem
+                        pad_amount = self.sp_tp_product - rem
                         tokens.extend([self.chat_tokenizer.tokenizer.pad_token_id] * pad_amount)
                         is_completition.extend([False] * pad_amount)
                         input_mask.extend([0] * pad_amount)
 
-                    if self.sp_chunks > 1:
+                    if self.sp_tp_product > 1:
                         # sequence needs to be of length (closest multiple of 2 * sp_pg.size()) + 1
                         # + 1 is so we have (closest multiple of 2 * sp_pg.size()) after shifting by one to get causal prediction
                         tokens.append(self.chat_tokenizer.tokenizer.pad_token_id)
