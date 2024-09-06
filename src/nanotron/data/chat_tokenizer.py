@@ -108,6 +108,8 @@ class ChatTokenizer:
         role = message["from"]
         if role == "gpt" or role == "assistant":
             return "assistant", False
+        elif role == "summary" or role == "author":
+            return role, False
         elif role == "human":
             return "user", True
         else:
