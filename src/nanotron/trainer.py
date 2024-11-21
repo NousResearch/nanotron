@@ -1,4 +1,5 @@
 import datetime
+import gc
 import json
 import os
 import shutil
@@ -438,8 +439,6 @@ class DistributedTrainer:
 
         prof = get_profiler(config=self.config)
         # free memory
-        import gc
-
         gc.collect()
         torch.cuda.empty_cache()
         with prof:
