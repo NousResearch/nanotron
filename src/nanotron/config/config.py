@@ -158,6 +158,8 @@ class CheckpointsArgs:
     save_initial_state: Optional[bool] = False
     save_final_state: Optional[bool] = False
     resume_checkpoint_path: Optional[Path] = None
+    load_lr_scheduler: Optional[bool] = True
+    load_optimizer: Optional[bool] = True
     checkpoints_path_is_shared_file_system: Optional[bool] = False
 
     def __post_init__(self):
