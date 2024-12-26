@@ -295,6 +295,9 @@ class LRSchedulerArgs:
 
 @dataclass
 class SGDOptimizerArgs:
+    momentum: float
+    dampening: float
+    nesterov: bool
     name: str = "sgd"
 
 
@@ -308,10 +311,18 @@ class AdamWOptimizerArgs:
 
 
 @dataclass
+class DeMoOptimizerArgs:
+    compression_decay: float
+    compression_topk: int
+    compression_chunk: int
+    name: str = "demo"
+
+
+@dataclass
 class OptimizerArgs:
     """Arguments related to the optimizer and learning rate"""
 
-    optimizer_factory: Union[SGDOptimizerArgs, AdamWOptimizerArgs]
+    optimizer_factory: Union[SGDOptimizerArgs, AdamWOptimizerArgs, DeMoOptimizerArgs]
     zero_stage: int
     weight_decay: float
     clip_grad: Optional[float]
@@ -353,6 +364,7 @@ class Config:
     profiler: Optional[ProfilerArgs] = None
     lighteval: Optional[LightEvalConfig] = None
     s3_upload: Optional[S3UploadArgs] = None
+    reduce_grads: bool = True
 
     @classmethod
     def create_empty(cls):
@@ -399,6 +411,10 @@ class Config:
         # # if lighteval, we need tokenizer to be defined
         # if self.checkpoints.lighteval is not None:
         #     assert self.tokenizer.tokenizer_name_or_path is not None
+
+        if self.optimizer.optimizer_factory.name == "demo" and self.reduce_grads:
+            raise ValueError("reduce_grads must be off for DeMo")
+
 
     @property
     def global_batch_size(self):

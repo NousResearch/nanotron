@@ -23,6 +23,7 @@ from nanotron.distributed import ProcessGroup
 from nanotron.logging import LogItem, log_rank
 from nanotron.models.base import NanotronModel
 from nanotron.optim.base import BaseOptimizer, Optimizer
+from nanotron.optim.demo import DeMo
 from nanotron.optim.gradient_accumulator import (
     FP32GradBucketManager,
     FP32GradientAccumulator,
@@ -343,6 +344,17 @@ def init_optimizer_and_grad_accumulator(
                 return torch.optim.SGD(
                     param_groups,
                     lr=optimizer_args.learning_rate_scheduler.learning_rate,
+                    weight_decay=optimizer_args.weight_decay,
+                )
+
+        elif optimizer_args.optimizer_factory.name == "demo":
+
+            def optimizer(param_groups):
+                return DeMo(
+                    param_groups,
+                    compression_decay=optimizer_args.optimizer_factory.compression_decay,
+                    compression_chunk=optimizer_args.optimizer_factory.compression_chunk,
+                    compression_topk=optimizer_args.optimizer_factory.compression_topk,
                     weight_decay=optimizer_args.weight_decay,
                 )
 

@@ -59,6 +59,7 @@ from nanotron.models import NanotronModel, build_model
 from nanotron.models.base import check_model_has_grad
 from nanotron.models.llama import LlamaForTraining, RotaryEmbedding
 from nanotron.models.starcoder2 import Starcoder2ForTraining
+from nanotron.optim.demo import DeMo
 from nanotron.optim.clip_grads import clip_grad_norm
 from nanotron.parallel import ParallelContext
 from nanotron.parallel.data_parallel.utils import sync_gradients_across_dp
@@ -507,23 +508,24 @@ class DistributedTrainer:
             self.grad_accumulator.fp32_grads_allreduce_handle.wait()
 
         # Sync tied weights
-        if not isinstance(self.model, DistributedDataParallel):
-            # Manually sync across DP if it's not handled by DDP
-            sync_gradients_across_dp(
-                module=self.model,
-                dp_pg=self.parallel_context.dp_pg,
-                reduce_op=dist.ReduceOp.AVG,
-                # TODO @thomasw21: This is too memory hungry, instead we run all_reduce
-                reduce_scatter=False,  # optimizer.inherit_from(ZeroDistributedOptimizer),
+        if self.config.reduce_grads:
+            if not isinstance(self.model, DistributedDataParallel) and not self.config.global_batch_size:
+                # Manually sync across DP if it's not handled by DDP
+                sync_gradients_across_dp(
+                    module=self.model,
+                    dp_pg=self.parallel_context.dp_pg,
+                    reduce_op=dist.ReduceOp.AVG,
+                    # TODO @thomasw21: This is too memory hungry, instead we run all_reduce
+                    reduce_scatter=False,  # optimizer.inherit_from(ZeroDistributedOptimizer),
+                    grad_accumulator=self.grad_accumulator,
+                )
+
+            # TODO @nouamane: Put this in hooks so we can overlap communication with gradient computation on the last backward pass.
+            sync_tied_weights_gradients(
+                module=self.unwrapped_model,
+                parallel_context=self.parallel_context,
                 grad_accumulator=self.grad_accumulator,
             )
-
-        # TODO @nouamane: Put this in hooks so we can overlap communication with gradient computation on the last backward pass.
-        sync_tied_weights_gradients(
-            module=self.unwrapped_model,
-            parallel_context=self.parallel_context,
-            grad_accumulator=self.grad_accumulator,
-        )
 
         # Clip gradients
         if self.config.optimizer.clip_grad is not None:
@@ -783,7 +785,7 @@ class DistributedTrainer:
         parallel_context = self.parallel_context
 
         parallel_config = config.parallelism
-        make_ddp = parallel_context.data_parallel_size > 1 and not (
+        make_ddp = config.reduce_grads and parallel_context.data_parallel_size > 1 and not (
             config.optimizer.accumulate_grad_in_fp32 and config.optimizer.zero_stage > 0
         )
 
@@ -920,6 +922,7 @@ class DistributedTrainer:
             root_folder=checkpoint_path,
             training_metadata=self.metadata,
             config=self.config,
+            sanity_checks=self.config.reduce_grads,
         )
         save_random_states(
             random_states=self.random_states, parallel_context=self.parallel_context, root_folder=checkpoint_path
