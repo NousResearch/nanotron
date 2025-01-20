@@ -17,7 +17,7 @@ class ChatTokenizer:
         tokenizer_name_or_path (str): A path to a directory containing vocabulary files required by the tokenizer or the model id of a predefined tokenizer hosted inside a model repo on the Hugging Face Hub.
     """
 
-    def __init__(self, tokenizer_name_or_path: str, chat_format: ChatFormat = ChatFormat.LLAMA3):
+    def __init__(self, tokenizer_name_or_path: str, chat_format: ChatFormat = ChatFormat.LLAMA3, input_roles: List[str] = ["user"]):
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path)
 
         self._chat_format = chat_format
@@ -29,6 +29,8 @@ class ChatTokenizer:
             self._header_start = "<|im_start|>"
             self._header_end = "\n"
             self._turn_end = "<|im_end|>\n"
+
+        self._input_roles = input_roles
 
         # Add pad token if necessary
         if self.tokenizer.pad_token is None:
@@ -106,11 +108,6 @@ class ChatTokenizer:
             should be considered input (and therefore not trained on)
         """
         role = message["from"]
-        if role == "gpt" or role == "assistant":
-            return "assistant", False
-        elif role == "summary" or role == "author":
-            return role, False
-        elif role == "human":
-            return "user", True
-        else:
-            return role, True
+        if role == "gpt":
+            role = "assistant"
+        return role, role in self._input_roles
