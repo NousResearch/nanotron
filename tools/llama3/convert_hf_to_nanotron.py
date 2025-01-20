@@ -1,5 +1,5 @@
 """
-torchrun --nproc-per-node 1 tools/llama3/convert_hf_to_nanotron.py --nanotron-checkpoint-path nanotron_checkpoints/Nanotron-Llama-3-8B --pretrained-model-name-or-path meta-llama/Meta-Llama-3-8B-Instruct
+torchrun --nproc-per-node 1 tools/converters/convert_hf_to_nanotron.py --nanotron-checkpoint-path checkpoints/nanotron_pretrained_checkpoints/Nanotron-Llama-3.2-3B --pretrained-model-name-or-path meta-llama/Llama-3.2-3B
 """
 import argparse
 import json
@@ -95,7 +95,6 @@ def main(args):
         rms_norm_eps=hf_config.rms_norm_eps,
         rope_scaling=hf_config.rope_scaling,
         rope_theta=hf_config.rope_theta,
-        rope_interleaved=False,
         tie_word_embeddings=hf_config.tie_word_embeddings,
         use_cache=hf_config.use_cache,
         vocab_size=hf_config.vocab_size,
@@ -120,101 +119,93 @@ def main(args):
 
     # Copy params from HF to Nanotron
     log_rank("Copying weights from HF model to Nanotron model...", logger=logger, level=logging.INFO, rank=0)
-    # Token embeddings
-    log_rank("Copying Token Embeddings...", logger=logger, level=logging.INFO, rank=0)
-    assert (
-        nanotron_model.model.token_position_embeddings.pp_block.token_embedding.weight.shape
-        == hf_model.model.embed_tokens.weight.shape
-    )
     with torch.no_grad():
+        # Token embeddings
+        log_rank("Copying Token Embeddings...", logger=logger, level=logging.INFO, rank=0)
+        assert (
+            nanotron_model.model.token_position_embeddings.pp_block.token_embedding.weight.shape
+            == hf_model.model.embed_tokens.weight.shape
+        )
         nanotron_model.model.token_position_embeddings.pp_block.token_embedding.weight.copy_(
             hf_model.model.embed_tokens.weight
         )
 
-    # Decoder layers
-    for i in tqdm(
-        range(nanotron_llama_config.num_hidden_layers),
-        desc="Copying Hidden Layers",
-        total=nanotron_llama_config.num_hidden_layers,
-    ):
-        # Input layer norm
-        assert (
-            hf_model.model.layers[i].input_layernorm.weight.shape
-            == nanotron_model.model.decoder[i].pp_block.input_layernorm.weight.shape
-        )
-        with torch.no_grad():
+        # Decoder layers
+        for i in tqdm(
+            range(nanotron_llama_config.num_hidden_layers),
+            desc="Copying Hidden Layers",
+            total=nanotron_llama_config.num_hidden_layers,
+        ):
+            # Input layer norm
+            assert (
+                hf_model.model.layers[i].input_layernorm.weight.shape
+                == nanotron_model.model.decoder[i].pp_block.input_layernorm.weight.shape
+            )
             nanotron_model.model.decoder[i].pp_block.input_layernorm.weight.copy_(
                 hf_model.model.layers[i].input_layernorm.weight
             )
 
-        # Self attn
-        ## QKV
-        tmp_qkv_proj = torch.cat(
-            [
-                hf_model.model.layers[i].self_attn.q_proj.weight,
-                hf_model.model.layers[i].self_attn.k_proj.weight,
-                hf_model.model.layers[i].self_attn.v_proj.weight,
-            ],
-            dim=0,
-        )
-        assert tmp_qkv_proj.shape == nanotron_model.model.decoder[i].pp_block.attn.qkv_proj.weight.shape
-        with torch.no_grad():
+            # Self attn
+            ## QKV
+            tmp_qkv_proj = torch.cat(
+                [
+                    hf_model.model.layers[i].self_attn.q_proj.weight,
+                    hf_model.model.layers[i].self_attn.k_proj.weight,
+                    hf_model.model.layers[i].self_attn.v_proj.weight,
+                ],
+                dim=0,
+            )
+            assert tmp_qkv_proj.shape == nanotron_model.model.decoder[i].pp_block.attn.qkv_proj.weight.shape
             nanotron_model.model.decoder[i].pp_block.attn.qkv_proj.weight.copy_(tmp_qkv_proj)
 
-        ## O
-        assert (
-            hf_model.model.layers[i].self_attn.o_proj.weight.shape
-            == nanotron_model.model.decoder[i].pp_block.attn.o_proj.weight.shape
-        )
-        with torch.no_grad():
+            ## O
+            assert (
+                hf_model.model.layers[i].self_attn.o_proj.weight.shape
+                == nanotron_model.model.decoder[i].pp_block.attn.o_proj.weight.shape
+            )
             nanotron_model.model.decoder[i].pp_block.attn.o_proj.weight.copy_(
                 hf_model.model.layers[i].self_attn.o_proj.weight
             )
 
-        # MLP
-        ## Gate Up Proj
-        tmp_gate_up_proj = torch.cat(
-            [
-                hf_model.model.layers[i].mlp.gate_proj.weight,
-                hf_model.model.layers[i].mlp.up_proj.weight,
-            ],
-            dim=0,
-        )
+            # MLP
+            ## Gate Up Proj
+            tmp_gate_up_proj = torch.cat(
+                [
+                    hf_model.model.layers[i].mlp.gate_proj.weight,
+                    hf_model.model.layers[i].mlp.up_proj.weight,
+                ],
+                dim=0,
+            )
 
-        assert tmp_gate_up_proj.shape == nanotron_model.model.decoder[i].pp_block.mlp.gate_up_proj.weight.shape
-        with torch.no_grad():
+            assert tmp_gate_up_proj.shape == nanotron_model.model.decoder[i].pp_block.mlp.gate_up_proj.weight.shape
             nanotron_model.model.decoder[i].pp_block.mlp.gate_up_proj.weight.copy_(tmp_gate_up_proj)
 
-        ## Down Proj
-        assert (
-            hf_model.model.layers[i].mlp.down_proj.weight.shape
-            == nanotron_model.model.decoder[i].pp_block.mlp.down_proj.weight.shape
-        )
-        with torch.no_grad():
+            ## Down Proj
+            assert (
+                hf_model.model.layers[i].mlp.down_proj.weight.shape
+                == nanotron_model.model.decoder[i].pp_block.mlp.down_proj.weight.shape
+            )
             nanotron_model.model.decoder[i].pp_block.mlp.down_proj.weight.copy_(
                 hf_model.model.layers[i].mlp.down_proj.weight
             )
 
-        # Post attn layer norm
-        assert (
-            hf_model.model.layers[i].post_attention_layernorm.weight.shape
-            == nanotron_model.model.decoder[i].pp_block.post_attention_layernorm.weight.shape
-        )
-        with torch.no_grad():
+            # Post attn layer norm
+            assert (
+                hf_model.model.layers[i].post_attention_layernorm.weight.shape
+                == nanotron_model.model.decoder[i].pp_block.post_attention_layernorm.weight.shape
+            )
             nanotron_model.model.decoder[i].pp_block.post_attention_layernorm.weight.copy_(
                 hf_model.model.layers[i].post_attention_layernorm.weight
             )
 
-    # Last layer norm
-    log_rank("Copying Final Layer Norm...", logger=logger, level=logging.INFO, rank=0)
-    assert nanotron_model.model.final_layer_norm.pp_block.weight.shape == hf_model.model.norm.weight.shape
-    with torch.no_grad():
+        # Last layer norm
+        log_rank("Copying Final Layer Norm...", logger=logger, level=logging.INFO, rank=0)
+        assert nanotron_model.model.final_layer_norm.pp_block.weight.shape == hf_model.model.norm.weight.shape
         nanotron_model.model.final_layer_norm.pp_block.weight.copy_(hf_model.model.norm.weight)
 
-    # LM_Head
-    log_rank("Copying LM Head...", logger=logger, level=logging.INFO, rank=0)
-    assert nanotron_model.model.lm_head.pp_block.weight.shape == hf_model.lm_head.weight.shape
-    with torch.no_grad():
+        # LM_Head
+        log_rank("Copying LM Head...", logger=logger, level=logging.INFO, rank=0)
+        assert nanotron_model.model.lm_head.pp_block.weight.shape == hf_model.lm_head.weight.shape
         nanotron_model.model.lm_head.pp_block.weight.copy_(hf_model.lm_head.weight)
 
     log_rank("Copied weights from HF model to Nanotron model!", logger=logger, level=logging.INFO, rank=0)
