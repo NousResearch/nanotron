@@ -70,9 +70,9 @@ class ChatDataset(IterableDataset):
         self.sp_tp_product = self.sp_chunks * tp_ranks_size
 
         # Load, split and shuffle dataset
-        self.dataset = load_dataset(dataset_path, split=split, streaming=True)
+        self.dataset = load_dataset(dataset_path, split=split)
         self.dataset = split_dataset_by_node(self.dataset, dp_rank, dp_ranks_size)
-        self.dataset = self.dataset.shuffle(seed=seed, buffer_size=10_000)
+        self.dataset = self.dataset.shuffle(seed=seed, keep_in_memory=True)
 
         # TODO(tj.solergibert) Delete (debug), just 4 switching the training only on completitions setting
         if train_on_completions_only:
@@ -172,3 +172,5 @@ class ChatDataset(IterableDataset):
 
             # TODO(tj.solergibert) Change for log_rank (log_rank is problematic with JupyterNB)
             print("Consumed all samples, dataset is being re-looped.")
+            self.seed += 1
+            self.dataset = self.dataset.shuffle(seed=self.seed, keep_in_memory=True)

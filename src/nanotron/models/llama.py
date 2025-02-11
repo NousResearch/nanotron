@@ -902,6 +902,13 @@ class LlamaModel(nn.Module):
             module_output_keys={"input_embeds"},
         )
         log_rank(f"Initialize RoPE Theta = {config.rope_theta}", logger=logger, level=logging.INFO, rank=0)
+        if config.rope_interleaved:
+            log_rank(
+                "The RoPE interleaved version differs from the Transformers implementation. It's better to set rope_interleaved=False if you need to convert the weights to Transformers",
+                logger=logger,
+                level=logging.INFO,
+                rank=0,
+            )
         self.decoder = nn.ModuleList(
             [
                 PipelineBlock(
