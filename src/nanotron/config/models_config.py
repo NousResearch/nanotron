@@ -55,6 +55,13 @@ class LlamaConfig:
     use_cache: bool = True
     vocab_size: int = 32000
 
+    # MLA
+    q_lora_rank: int = 1024 # 1/4 hidden size
+    kv_lora_rank: int = 256 # 1/16 hidden size
+    qk_nope_head_dim: int = 64 # these two should sum up to total head dim
+    qk_rope_head_dim: int = 64 # 
+    v_head_dim: int = 128 # full head dim
+
     def __post_init__(self):
         # NOTE: user don't set self._init_method, ModelArgs will set it
         # then we only pass LlamaConfig around
